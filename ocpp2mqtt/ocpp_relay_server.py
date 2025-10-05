@@ -6,8 +6,8 @@ import asyncio
 import logging
 import ssl
 
-from components.relay.ocpprelay import OCPPRelay
-from components.relay.snoopws import SnoopWebSocketServer
+from ocpp2mqtt.relay.ocpprelay import OCPPRelay
+from ocpp2mqtt.relay.snoopws import SnoopWebSocketServer
 
 def parse_args():
     """Parse command line arguments."""
@@ -72,12 +72,7 @@ def get_ssl_context(ssl_cert, ssl_key):
     return ssl_context
 
 
-async def main():
-    parse_args()
-
-    logging.basicConfig(level=(logging.DEBUG if args.verbose else logging.INFO),
-        format='%(asctime)s - [%(levelname)-4.4s] - [%(threadName)-7.7s] - [%(name)-20.20s] - %(message)s')
-
+async def core():
     ssl_context = get_ssl_context(args.ssl_cert, args.ssl_key)
 
     # Stream of messages passed by the OCPP relay. The stream is used to monitor
@@ -95,5 +90,16 @@ async def main():
 
     await asyncio.gather(relay_server.wait_closed(), snoop_server.wait_closed())
 
+def main():
+    parse_args()
+
+    logging.basicConfig(level=(logging.DEBUG if args.verbose else logging.INFO),
+        format='%(asctime)s - [%(levelname)-4.4s] - [%(threadName)-7.7s] - [%(name)-20.20s] - %(message)s')
+
+    try:
+        asyncio.run(core())
+    except KeyboardInterrupt:
+        print("Exiting...")
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

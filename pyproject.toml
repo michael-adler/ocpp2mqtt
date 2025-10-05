@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ocpp2mqtt"
+version = "0.1.0"
+description = "Relay server for OCPP with metering data forwarded to an MQTT server."
+authors = [
+    { name = "Michael Adler" }
+]
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "websockets>=15.0.1",
+    "asyncio",
+    "setuptools",
+    "dataclasses_json"
+]
+
+[project.urls]
+Homepage = "https://github.com/michael-adler/ocpp2mqtt"
+
+[project.scripts]
+ocpp-relay-server = "ocpp2mqtt.ocpp_relay_server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ocpp2mqtt", "ocpp2mqtt.*"]
