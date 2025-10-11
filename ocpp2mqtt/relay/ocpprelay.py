@@ -6,32 +6,17 @@
 
 import asyncio
 import base64
-from datetime import datetime, timezone
 import json
 import logging
-from dataclasses import dataclass, field
-from typing import Any, Dict, Literal
-
 import websockets
-from dataclasses_json import dataclass_json, DataClassJsonMixin
+
+from ocpp2mqtt.common.types import MessageData
 
 
 def basic_auth_header(username, password):
     user_pass = f"{username}:{password}"
     basic_credentials = base64.b64encode(user_pass.encode()).decode()
     return ("Authorization", f"Basic {basic_credentials}")
-
-
-# Data class for messages passed to the snoop queue
-@dataclass_json
-@dataclass
-class MessageData(DataClassJsonMixin):
-    event: Literal["Connection", "Disconnection", "Message"]
-    sender: Literal["CP", "CSMS"]
-    protocol: str = None
-    cp_id: str = None
-    payload: Dict[str, Any] = field(default_factory=dict)
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
 
 
 class OCPPRelay:

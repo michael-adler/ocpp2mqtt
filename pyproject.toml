@@ -12,10 +12,11 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
-    "websockets>=15.0.1",
     "asyncio",
+    "dataclasses_json",
+    "paho-mqtt",
     "setuptools",
-    "dataclasses_json"
+    "websockets>=15.0.1"
 ]
 
 [project.urls]
@@ -23,6 +24,7 @@ Homepage = "https://github.com/michael-adler/ocpp2mqtt"
 
 [project.scripts]
 ocpp-relay-server = "ocpp2mqtt.ocpp_relay_server:main"
+ocpp-snoop2mqtt = "ocpp2mqtt.ocpp_snoop2mqtt:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
