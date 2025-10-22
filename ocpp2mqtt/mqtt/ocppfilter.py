@@ -12,7 +12,7 @@ class OCPPFilter:
     def __init__(self):
         self._logger = logging.getLogger()
         # Will be indexed by cp_id
-        self._vendor_id = {}
+        self._manufacturer = {}
 
     def filter(self, msg: MessageData) -> list | None:
         if msg.event != "Message": return None
@@ -33,17 +33,26 @@ class OCPPFilter:
         if ocpp[0] != 2:
             return None
 
-        if cp_id not in self._vendor_id:
-            self._vendor_id[cp_id] = None
-        if not self._vendor_id[cp_id]:
-            self._vendor_id[cp_id] = self._get_vendor_id(ocpp)
+        if cp_id not in self._manufacturer:
+            self._manufacturer[cp_id] = None
+        if not self._manufacturer[cp_id]:
+            self._manufacturer[cp_id] = self._get_manufacturer(ocpp)
+
+        if ocpp[2] == "Heartbeat":
+            m = self._new_MQTTData(cp_id, msg.timestamp)
+            m.topic = "heartbeat"
+            m.unique_id = f"OCPP_{cp_id}_heartbeat"
+            m.name = f"Heartbeat CP {cp_id}"
+            m.device_class = "timestamp"
+            m.value = msg.timestamp
+            return [m]
 
         if protocol == "1.6":
             return self._filter_ocpp16(cp_id, msg.timestamp, ocpp)
         else:
             return self._filter_ocpp20(cp_id, msg.timestamp, ocpp)
 
-    def _get_vendor_id(self, ocpp: list) -> str | None:
+    def _get_manufacturer(self, ocpp: list) -> str | None:
         """
         Extract vendor ID from OCPP message if available.
         """
@@ -59,8 +68,51 @@ class OCPPFilter:
     def _new_MQTTData(self, cp_id: str, timestamp: str) -> MQTTData:
         m = MQTTData()
         m.cp_id = cp_id
-        m.vendor_id = self._vendor_id[cp_id]
+        m.manufacturer = self._manufacturer[cp_id]
         m.timestamp = timestamp
+        return m
+
+    def _new_meter_MQTTData(self, cp_id: str, timestamp: str, value_type: str,
+                            evse_id: str, location: str,
+                            value: str, unit: str) -> MQTTData:
+        """
+        Create a new MQTTData instance for a meter value. This code is common to OCPP 1.6
+        and OCPP 2.0.
+        """
+        if not isinstance(value_type, str):
+            value_type = "Energy.Active.Import.Register"
+        value_type = value_type.replace(".", "-")
+
+        if not isinstance(value_type, str):
+            return None
+
+        if value_type.startswith("Current"):
+            sensor_type = 'current'
+        elif value_type.startswith("Energy"):
+            sensor_type = 'energy'
+        elif value_type.startswith("Power"):
+            sensor_type = 'power'
+        elif value_type.startswith("Voltage"):
+            sensor_type = 'voltage'
+        else:
+            return None
+
+        if not location:
+            location = "Outlet"
+
+        m = self._new_MQTTData(cp_id, timestamp)
+        m.topic = f"{evse_id}/{location}/{value_type}"
+        m.unique_id = f"OCPP_{cp_id}_{m.topic}".replace('/', '_')
+
+        if not evse_id:
+            m.name = f"{value_type.replace('-', ' ')} {location} CP {cp_id}"
+        else:
+            m.name = f"C{evse_id} {value_type.replace('-', ' ')} {location} CP {cp_id}"
+
+        m.value = value
+        m.device_class = sensor_type
+        m.unit = unit
+
         return m
 
     def _filter_ocpp16(self, cp_id: str, timestamp: str, ocpp: list) -> list | None:
@@ -73,8 +125,13 @@ class OCPPFilter:
         if action == "StatusNotification":
             self._logger.debug(f"OCPP 1.6 StatusNotification from {cp_id}: {payload}")
             m = self._new_MQTTData(cp_id, timestamp)
-            m.topic = f"{payload.get('connectorId')}/status"
-            m.unique_id = f"OCPP_{cp_id}_{payload.get('connectorId')}_status"
+            cable_id = payload.get('connectorId')
+            m.topic = f"{cable_id}/status"
+            m.unique_id = f"OCPP_{cp_id}_{cable_id}_status"
+            if not cable_id:
+                m.name = f"Status CP {cp_id}"
+            else:
+                m.name = f"C{cable_id} Status CP {cp_id}"
             m.value = payload.get('status')
             return [m]
         elif action == "MeterValues":
@@ -82,22 +139,13 @@ class OCPPFilter:
             messages = []
             for mv in payload.get('meterValue', []):
                 for v in mv.get('sampledValue', []):
-                    m = self._new_MQTTData(cp_id, timestamp)
-                    value_type = v.get('measurand').replace(".", "-")
-                    # Only process energy measurements for now
-                    if not isinstance(value_type, str) or not value_type.startswith("Energy"):
+                    m = self._new_meter_MQTTData(cp_id, timestamp, v.get('measurand'),
+                                                 payload.get('connectorId'),
+                                                 v.get('location'),
+                                                 v.get('value'), v.get('unit'))
+                    if not m:
                         continue
 
-                    topic = payload.get('connectorId')
-                    if v.get('location'):
-                        topic = f"{topic}/{v.get('location')}"
-                    else:
-                        topic = f"{topic}/Outlet"
-                    m.topic = f"{topic}/{value_type}"
-                    m.unique_id = f"OCPP_{cp_id}_{topic.replace('/', '_')}"
-                    m.value = v.get('value')
-                    m.value_type = 'energy'
-                    m.unit = v.get('unit')
                     messages.append(m)
             return messages
 
@@ -118,8 +166,13 @@ class OCPPFilter:
             # Use evseId for OCPP 2.0. The connectorId indicates a cable within the evseId
             # but only one cable can be active at a time. The MeterValues are per evseId, so
             # record status globally for the evseId.
-            m.topic = f"{payload.get('evseId')}/status"
-            m.unique_id = f"OCPP_{cp_id}_{payload.get('evseId')}_status"
+            cable_id = payload.get('evseId')
+            m.topic = f"{cable_id}/status"
+            m.unique_id = f"OCPP_{cp_id}_{cable_id}_status"
+            if not cable_id:
+                m.name = f"Status CP {cp_id}"
+            else:
+                m.name = f"C{cable_id} Status CP {cp_id}"
             m.value = payload.get('connectorStatus')
             return [m]
         elif action == "MeterValues":
@@ -127,30 +180,18 @@ class OCPPFilter:
             messages = []
             for mv in payload.get('meterValue', []):
                 for v in mv.get('sampledValue', []):
-                    m = self._new_MQTTData(cp_id, timestamp)
-                    value_type = v.get('measurand')
-                    if not isinstance(value_type, str):
-                        value_type = "Energy.Active.Import.Register"
-                    value_type = value_type.replace(".", "-")
-                    # Only process energy measurements for now
-                    if not value_type.startswith("Energy"):
-                        continue
-
-                    topic = payload.get('evseId')
-                    if v.get('location'):
-                        topic = f"{topic}/{v.get('location')}"
-                    else:
-                        topic = f"{topic}/Outlet"
-                    m.topic = f"{topic}/{value_type}"
-                    m.unique_id = f"OCPP_{cp_id}_{topic.replace('/', '_')}"
-                    m.value = v.get('value')
-                    m.value_type = 'energy'
-
                     unit = v.get('unitOfMeasure')
                     if not unit:
-                        m.unit = 'Wh'
+                        unit = 'Wh'
                     else:
-                        m.unit = unit.get('unit')
+                        unit = unit.get('unit')
+
+                    m = self._new_meter_MQTTData(cp_id, timestamp, v.get('measurand'),
+                                                 payload.get('evseId'),
+                                                 v.get('location'),
+                                                 v.get('value'), unit)
+                    if not m:
+                        continue
 
                     messages.append(m)
             return messages

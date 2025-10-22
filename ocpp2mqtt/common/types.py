@@ -23,11 +23,12 @@ class MQTTData():
     """Data class for messages passed to the MQTT queue. For Home Assistant the discovery
     topic will be homeassistant/device/ocpp/<unique_id>/config and the state will be
     published to ocpp/<cp_id>/<topic>/state as value_json.<value_type>."""
-    device_class: str = "sensor"
     cp_id: str = None
     topic: str = None
+    manufacturer: str = None
     unique_id: str = None
-    vendor_id: str = None
+    device_class: str = None
+    name: str = None
     value: Any = None
     value_type: str = None
     unit: str = None

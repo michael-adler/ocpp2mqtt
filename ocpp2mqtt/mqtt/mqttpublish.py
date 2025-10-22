@@ -120,6 +120,9 @@ class MQTTPublisher:
         if topic in self._published_discoveries:
             return None # Already published
 
+        # For now the discovery messages have only one component since we might see OCPP measurement
+        # packets with varying types. Using the config format makes it easy to extend later.
+        # Home Assistant will group multiple components with the same device ID.
         discover = {
             "device": {
                 "identifiers": f"cp_{data.cp_id}",
@@ -135,34 +138,33 @@ class MQTTPublisher:
                 f"{data.unique_id}_value": {
                     "platform": "sensor",
                     "unique_id": f"{data.unique_id}_value",
+                    "name": data.name,
                     "expire_after": 0,
                     "force_update": "true"
-                    },
-                f"{data.unique_id}_lastseen": {
-                    "platform": "sensor",
-                    "name": "Last Seen",
-                    "device_class": "timestamp",
-                    "value_template": "{{ value_json.lastseen }}",
-                    "unique_id": f"{data.unique_id}_lastseen"
                     }
                 },
             "state_topic": state_topic,
             "qos": 1
             }
 
-        if data.vendor_id:
-            discover["device"]["manufacturer"] = data.vendor_id
+        if data.manufacturer:
+            discover["device"]["manufacturer"] = data.manufacturer
 
-        if not data.value_type:
+        if not data.device_class:
             # Unknown value type, assume status
-            discover["components"][f"{data.unique_id}_value"]["name"] = f"Charge Point Status {data.unique_id}"
             discover["components"][f"{data.unique_id}_value"]["value_template"] = "{{ value_json.value }}"
+        elif data.topic == "heartbeat":
+            discover["components"][f"{data.unique_id}_value"]["device_class"] = data.device_class
+            discover["components"][f"{data.unique_id}_value"]["value_template"] = "{{ value_json.value }}"
+            discover["components"][f"{data.unique_id}_value"]["expire_after"] = 3600
+            discover["components"][f"{data.unique_id}_value"]["force_update"] = "false"
         else:
-            discover["components"][f"{data.unique_id}_value"]["name"] = f"Electric Meter {data.unique_id}"
             discover["components"][f"{data.unique_id}_value"]["value_template"] = "{{ value_json.value|float }}"
             discover["components"][f"{data.unique_id}_value"]["unit_of_measurement"] = data.unit
             discover["components"][f"{data.unique_id}_value"]["icon"] = "mdi:meter-electric-outline"
-            discover["components"][f"{data.unique_id}_value"]["device_class"] = "energy"
+            discover["components"][f"{data.unique_id}_value"]["device_class"] = data.device_class
+            if data.device_class == "energy":
+                discover["components"][f"{data.unique_id}_value"]["state_class"] = "total"
 
         self._logger.info(f"Publishing discovery message for {data} to topic {topic}")
         info = self._mqtt.publish(topic, json.dumps(discover), qos=1, retain=False)
@@ -175,8 +177,7 @@ class MQTTPublisher:
         """Publish the given data to the MQTT broker."""
         topic = self._mqtt_state_topic(data)
         payload = {
-            "value": data.value,
-            "lastseen": data.timestamp
+            "value": data.value
         }
 
         self._logger.info(f"Publishing data {data} to topic {topic}")

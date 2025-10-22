@@ -48,7 +48,7 @@ async def process_messages(publisher):
     ocpp_filter = OCPPFilter()
 
     async for msg in receive_ocpp_snoop(ws_uri=args.snoop_socket):
-    #for msg in receive_ocpp_from_file("../ocpp2mqtt.orig/filtered.json"):
+    #for msg in receive_ocpp_from_file("../ocpp2mqtt.orig/output.json"):
         filtered = ocpp_filter.filter(msg)
         if filtered:
             for m in filtered:
