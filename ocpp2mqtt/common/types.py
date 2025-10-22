@@ -20,11 +20,15 @@ class MessageData(DataClassJsonMixin):
 @dataclass_json
 @dataclass
 class MQTTData():
-    """Data class for messages passed to the MQTT queue. For Home Assistant the configuration
-    topic will be homeassistant/<device_class>/<id>/config and the state will be published to
-    homeassistant/<device_class>/<id>/state as value_json.<value_type>."""
+    """Data class for messages passed to the MQTT queue. For Home Assistant the discovery
+    topic will be homeassistant/device/ocpp/<unique_id>/config and the state will be
+    published to ocpp/<cp_id>/<topic>/state as value_json.<value_type>."""
     device_class: str = "sensor"
-    id: str = None
+    cp_id: str = None
+    topic: str = None
+    unique_id: str = None
+    vendor_id: str = None
     value: Any = None
     value_type: str = None
     unit: str = None
+    timestamp: str = None

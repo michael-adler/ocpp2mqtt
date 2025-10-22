@@ -25,6 +25,15 @@ Map a stream of OCPP messages to MQTT topics.
     parser.add_argument('--snoop-socket', type=str, default='ws://localhost:8501/',
         help="""URL of the OCPP relay's snoop port (default: %(default)s).""")
 
+    parser.add_argument('--mqtt-broker-host', type=str, default='localhost',
+        help="""Hostname or IP address of the MQTT broker (default: %(default)s).""")
+    parser.add_argument('--mqtt-broker-port', type=int, default=1883,
+        help="""Port of the MQTT broker (default: %(default)s).""")
+    parser.add_argument('--mqtt-broker-username', type=str, default=None,
+        help="""Username for MQTT broker authentication (default: %(default)s).""")
+    parser.add_argument('--mqtt-broker-password', type=str, default=None,
+        help="""Password for MQTT broker authentication (default: %(default)s).""")
+
     # Verbose/quiet
     group = parser.add_mutually_exclusive_group()
     group.add_argument('-v', '--verbose', action='store_true', help="""Verbose output.""")
@@ -39,7 +48,7 @@ async def process_messages(publisher):
     ocpp_filter = OCPPFilter()
 
     async for msg in receive_ocpp_snoop(ws_uri=args.snoop_socket):
-    #for msg in receive_ocpp_from_file("../ocpp2mqtt.orig/output.json"):
+    #for msg in receive_ocpp_from_file("../ocpp2mqtt.orig/filtered.json"):
         filtered = ocpp_filter.filter(msg)
         if filtered:
             for m in filtered:
@@ -47,21 +56,24 @@ async def process_messages(publisher):
                 await publisher.publish_data(m)
 
     logger.info("Message source closed. Stopping publisher...")
-    await publisher.stop()
+    publisher.stop()
 
 
 async def core():
+    global args
     logger = logging.getLogger()
 
     # Instantiate the MQTT publisher
-    publisher = MQTTPublisher(broker_host="test.mosquitto.org", broker_port=1883)
+    publisher = MQTTPublisher(broker_host=args.mqtt_broker_host,
+                              broker_port=args.mqtt_broker_port,
+                              broker_username=args.mqtt_broker_username,
+                              broker_password=args.mqtt_broker_password)
 
     # Run both publisher and message processing concurrently
     await asyncio.gather(
         publisher.start(),
         process_messages(publisher)
-    )
-
+        )
 
 def main():
     parse_args()
@@ -73,9 +85,6 @@ def main():
         asyncio.run(core())
     except KeyboardInterrupt:
         print("Exiting...")
-        sys.exit(1)
-    except Exception as e:
-        print(f"An error occurred: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
