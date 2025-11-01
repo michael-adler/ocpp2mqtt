@@ -22,7 +22,7 @@ class MQTTPublisher:
         self._connected = False
 
         self._mqtt = mqtt_client.Client()
-        self._mqtt.connect_timeout = 5.0
+        self._mqtt.connect_timeout = 60.0
         self._mqtt.on_connect = self._mqtt_on_connect
         self._mqtt.on_connect_fail = self._mqtt_on_connect_fail
         self._mqtt.on_message = self._mqtt_on_message
@@ -118,7 +118,6 @@ class MQTTPublisher:
     def _mqtt_on_connect_fail(self, client, userdata):
         """Callback function for when the client fails to connect to the MQTT broker."""
         self._logger.error(f"Failed to connect to MQTT broker {self._broker_host}:{self._broker_port}")
-        #self._broker_connection_failed = True
 
     def _mqtt_on_message(self, client, userdata, msg):
         """Monitor messages published to broker to detect status changes."""

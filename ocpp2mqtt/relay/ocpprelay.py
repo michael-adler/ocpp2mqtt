@@ -72,15 +72,43 @@ class OCPPRelay:
         if all([self.csms_id, self.csms_pass]):
             extra_headers.append(basic_auth_header(self.csms_id, self.csms_pass))
 
-        async with websockets.connect(
-            f"{self.csms_url}/{charge_point_id}",
+        csms_uri = f"{self.csms_url}/{charge_point_id}"
+
+        # Use the async iterator form of websockets.connect which yields a
+        # connected websocket each time a connection is established. When the
+        # connection closes, the iterator continues and will attempt to
+        # reconnect. We must stop attempting reconnects if the ChargePoint
+        # (client) websocket closes.
+        async for csms_ws in websockets.connect(
+            csms_uri,
             subprotocols=[ws_subprotocol],
             additional_headers=extra_headers,
-        ) as csms_ws:
-            await asyncio.gather(
-                self._relay(cp_ws, csms_ws, source_name="CP", target_name="CSMS", cp_id=charge_point_id, protocol=ws_subprotocol),
-                self._relay(csms_ws, cp_ws, source_name="CSMS", target_name="CP", cp_id=charge_point_id, protocol=ws_subprotocol),
-            )
+        ):
+            # If the client side disconnected while we were trying to connect,
+            # there's no point in reconnecting to the CSMS.
+            if getattr(cp_ws, "closed", False):
+                self.logger.info("ChargePoint websocket closed before CSMS connection; aborting reconnect attempts.")
+                break
+
+            try:
+                await asyncio.gather(
+                    self._relay(cp_ws, csms_ws, source_name="CP", target_name="CSMS", cp_id=charge_point_id, protocol=ws_subprotocol),
+                    self._relay(csms_ws, cp_ws, source_name="CSMS", target_name="CP", cp_id=charge_point_id, protocol=ws_subprotocol),
+                )
+            except asyncio.CancelledError:
+                # Propagate cancellations
+                raise
+            except (websockets.exceptions.ConnectionClosed, websockets.exceptions.ConnectionClosedOK) as e:
+                self.logger.info(f"CSMS connection closed: {e}; async-for will attempt reconnect if appropriate")
+                # Loop will continue and websockets.connect will try to reconnect
+            except Exception as e:
+                # Log unexpected errors and let the async-for attempt to reconnect
+                self.logger.warning(f"Error during relaying to CSMS: {e}; will attempt to reconnect")
+
+            # If the ChargePoint disconnected while we were relaying, stop retrying
+            if getattr(cp_ws, "closed", False):
+                self.logger.info("ChargePoint websocket closed; stopping CSMS reconnect attempts.")
+                break
 
     async def start(self, host, port, ssl_context=None):
         server = await websockets.serve(self._on_connect, host, port, ssl=ssl_context)

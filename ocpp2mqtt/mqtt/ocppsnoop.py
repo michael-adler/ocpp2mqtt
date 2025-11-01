@@ -16,20 +16,17 @@ async def receive_ocpp_snoop(ws_uri: str):
     """
     logger = logging.getLogger()
     logger.info(f"Connecting to {ws_uri}...")
-    try:
-        async with websockets.connect(ws_uri) as websocket:
+    async for websocket in websockets.connect(ws_uri):
+        try:
             async for message in websocket:
                 try:
                     msg = MessageData(**json.loads(message))
                     yield msg
                 except json.JSONDecodeError as e:
                     logger.error(f"Error decoding JSON: {e}\nMessage: {message}")
-    except websockets.exceptions.ConnectionClosed as e:
-        logger.info(f"Connection closed: {e.code} ({e.reason})")
-    except ConnectionRefusedError:
-        logger.info("Connection refused. Is the server running?")
-    except Exception as e:
-        logger.info(f"An unexpected error occurred: {e}")
+        except websockets.exceptions.ConnectionClosed as e:
+            logger.info(f"Connection closed: {e.code} ({e.reason}). Retrying...")
+            continue
 
 
 def receive_ocpp_from_file(file_path: str):
