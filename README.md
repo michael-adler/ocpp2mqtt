@@ -25,7 +25,7 @@ For example, two processes:
 
 ```bash
 # Start the relay (listens on ports 8500 and 8501 by default)
-ocpp-relay-server --cpms wss://<actual OCPP server>/ws/webSocket
+ocpp-relay-server --cpms wss://<actual OCPP server>/ws/webSocket &
 
 # Snoop and forward to a Mosquito broker
 ocpp-snoop2mqtt --mqtt-broker-username <user> --mqtt-broker-password <pw> --mqtt-broker-host=homeassistant

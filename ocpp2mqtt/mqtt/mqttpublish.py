@@ -25,8 +25,9 @@ class MQTTPublisher:
         self._mqtt.connect_timeout = 5.0
         self._mqtt.on_connect = self._mqtt_on_connect
         self._mqtt.on_connect_fail = self._mqtt_on_connect_fail
-        self._broker_connection_failed = False
+        self._mqtt.on_message = self._mqtt_on_message
 
+        self._broker_connection_failed = False
         self._published_discoveries = {}
 
     async def publish_data(self, data: MQTTData):
@@ -89,6 +90,12 @@ class MQTTPublisher:
         # self._queue.shutdown() would work well here, but it requires Python 3.11+
         self._exit_task = True
 
+    def _mqtt_rediscover(self):
+        """Re-publish discovery messages."""
+        for topic, discover in self._published_discoveries.items():
+            self._logger.info(f"Re-publishing discovery message for topic {topic}")
+            self._mqtt.publish(topic, json.dumps(discover), qos=1, retain=False)
+
     def _mqtt_on_connect(self, client, userdata, flags, rc, properties=None):
         """Callback function for when the client connects to the MQTT broker."""
         if rc != 0:
@@ -97,9 +104,14 @@ class MQTTPublisher:
             return
 
         self._logger.info(f"Connection successful to {self._broker_host}:{self._broker_port}...")
-        for topic, discover in self._published_discoveries.items():
-            self._logger.info(f"Re-publishing discovery message for topic {topic}")
-            self._mqtt.publish(topic, json.dumps(discover), qos=1, retain=False)
+        self._mqtt_rediscover()
+
+        # subscribe to Home Assistant status topic so we can react to broker-wide availability
+        status_topic = f"{self._topic_prefix}/status"
+        try:
+            self._mqtt.subscribe(status_topic, qos=1)
+        except Exception:
+            self._logger.exception(f"Failed to subscribe to {status_topic}")
 
         self._connected = True
 
@@ -107,6 +119,22 @@ class MQTTPublisher:
         """Callback function for when the client fails to connect to the MQTT broker."""
         self._logger.error(f"Failed to connect to MQTT broker {self._broker_host}:{self._broker_port}")
         #self._broker_connection_failed = True
+
+    def _mqtt_on_message(self, client, userdata, msg):
+        """Monitor messages published to broker to detect status changes."""
+        try:
+            topic = msg.topic
+            payload = msg.payload.decode("utf-8", errors="replace")
+            self._logger.debug(f"Received MQTT message on {topic}: {payload}")
+            if topic == f"{self._topic_prefix}/status":
+                if isinstance(payload, str):
+                    msg = payload.strip().lower()
+                    self._logger.info(f"Primary client is {msg}")
+                    # New client is online. Re-publish discovery topics.
+                    if msg == "online":
+                        self._mqtt_rediscover()
+        except Exception:
+            self._logger.exception("Unhandled error in _mqtt_on_message")
 
     def _mqtt_state_topic(self, data: MQTTData) -> str:
         """Generate the MQTT state topic for the given data."""
