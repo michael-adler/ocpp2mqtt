@@ -5,6 +5,7 @@ import argparse
 import asyncio
 import logging
 import sys
+import yaml
 
 from ocpp2mqtt.mqtt.mqttpublish import MQTTPublisher
 from ocpp2mqtt.mqtt.ocppsnoop import receive_ocpp_snoop, receive_ocpp_from_file
@@ -25,6 +26,9 @@ Map a stream of OCPP messages to MQTT topics.
     parser.add_argument('--snoop-socket', type=str, default='ws://localhost:8501/',
         help="""URL of the OCPP relay's snoop port (default: %(default)s).""")
 
+    parser.add_argument('--config', type=str, default=None,
+        help="""Path to YAML config file. Values in a 'snoop2mqtt' section will be used as defaults.""")
+
     parser.add_argument('--mqtt-broker-host', type=str, default='localhost',
         help="""Hostname or IP address of the MQTT broker (default: %(default)s).""")
     parser.add_argument('--mqtt-broker-port', type=int, default=1883,
@@ -32,12 +36,37 @@ Map a stream of OCPP messages to MQTT topics.
     parser.add_argument('--mqtt-broker-username', type=str, default=None,
         help="""Username for MQTT broker authentication (default: %(default)s).""")
     parser.add_argument('--mqtt-broker-password', type=str, default=None,
-        help="""Password for MQTT broker authentication (default: %(default)s).""")
+        help="""Password for MQTT broker authentication.""")
 
     # Verbose/quiet
     group = parser.add_mutually_exclusive_group()
     group.add_argument('-v', '--verbose', action='store_true', help="""Verbose output.""")
     group.add_argument('-q', '--quiet', action='store_true', help="""Reduce output.""")
+
+    # First parse only the --config argument to allow YAML defaults
+    preliminary = parser.parse_known_args()[0]
+
+    yaml_defaults = {}
+    if preliminary and preliminary.config:
+        try:
+            with open(preliminary.config, 'r', encoding='utf-8') as f:
+                cfg = yaml.safe_load(f) or {}
+                yaml_defaults = cfg.get('snoop2mqtt', {}) if isinstance(cfg, dict) else {}
+        except FileNotFoundError:
+            print(f"Config file not found: {preliminary.config}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as e:
+            print(f"Error loading config file {preliminary.config}: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    # Apply YAML defaults where CLI didn't explicitly set a value
+    for key, val in yaml_defaults.items():
+        argname = f"--{key.replace('_', '-') }"
+        # Only set default if not explicitly provided on the command line
+        if not any(argname in a for a in sys.argv[1:]):
+            dest = key
+            if hasattr(parser, 'get_default'):
+                parser.set_defaults(**{dest: val})
 
     global args
     args = parser.parse_args()

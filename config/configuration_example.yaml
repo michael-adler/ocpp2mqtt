@@ -1,0 +1,33 @@
+---
+# Example configuration for ocpp2mqtt snoop-to-mqtt bridge. A single configuration
+# file may be used for both the relay server and the snoop to MQTT processes.
+
+# Command-line arguments override values in this file.
+
+# Configuration for the OCPP relay server (ocpp_relay_server.py)
+relay:
+  # URL of the real CPMS. The target of the relay.
+  #cpms: "wss://cpms.example.com/ws/webSocket"
+
+  # Relay listen interface and port for charge points (leave ocpp_host null for all interfaces)
+  #ocpp_host: null
+  #ocpp_port: 8500
+
+  # Snoop server interface and port for monitoring clients. ocpp-snoop2mqtt will connect to this port.
+  #snoop_host: "localhost"
+  #snoop_port: 8501
+
+  # Optional paths to SSL certificate and key for the relay server
+  #ssl_cert: "/path/to/cert.pem"
+  #ssl_key: "/path/to/key.pem"
+
+# Configuration for the OCPP snoop and MQTT broker connections
+snoop2mqtt:
+  # URL of the OCPP relay's snoop websocket
+  #snoop_socket: "ws://localhost:8501/"
+
+  # MQTT broker configuration
+  #mqtt_broker_host: "localhost"
+  #mqtt_broker_port: 1883
+  #mqtt_broker_username: "your_username_here"
+  #mqtt_broker_password: "your_password_here"

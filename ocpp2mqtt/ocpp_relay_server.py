@@ -5,6 +5,8 @@ import argparse
 import asyncio
 import logging
 import ssl
+import sys
+import yaml
 
 from ocpp2mqtt.relay.ocpprelay import OCPPRelay
 from ocpp2mqtt.relay.snoopws import SnoopWebSocketServer
@@ -36,7 +38,11 @@ all charge points. The JSON stream passed to snoop clients includes charge point
         description="Relay OCPP traffic between a charge point and a CPMS.",
         epilog=msg)
 
-    parser.add_argument('--cpms', required=1, help="""URL of the real CPMS (required).""")
+    parser.add_argument('--config', type=str, default=None,
+        help="""Path to YAML config file. Values in a 'relay' section will be used as defaults.""")
+
+    parser.add_argument('--cpms', type=str, default=None,
+        help="""URL of the real CPMS.""")
 
     parser.add_argument('--ocpp-host', type=str, default=None,
         help="""OCPP relay server interface address (default: all interfaces).""")
@@ -58,8 +64,37 @@ all charge points. The JSON stream passed to snoop clients includes charge point
     group.add_argument('-v', '--verbose', action='store_true', help="""Verbose output.""")
     group.add_argument('-q', '--quiet', action='store_true', help="""Reduce output.""")
 
+    # First parse only the --config argument to allow YAML defaults
+    preliminary = parser.parse_known_args()[0]
+
+    yaml_defaults = {}
+    if preliminary and preliminary.config:
+        try:
+            with open(preliminary.config, 'r', encoding='utf-8') as f:
+                cfg = yaml.safe_load(f) or {}
+                yaml_defaults = cfg.get('relay', {}) if isinstance(cfg, dict) else {}
+        except FileNotFoundError:
+            print(f"Config file not found: {preliminary.config}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as e:
+            print(f"Error loading config file {preliminary.config}: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    # Apply YAML defaults where CLI didn't explicitly set a value
+    for key, val in yaml_defaults.items():
+        argname = f"--{key.replace('_', '-') }"
+        # Only set default if not explicitly provided on the command line
+        if not any(argname in a for a in sys.argv[1:]):
+            dest = key
+            if hasattr(parser, 'get_default'):
+                parser.set_defaults(**{dest: val})
+
     global args
     args = parser.parse_args()
+
+    if not args.cpms:
+        print("CPMS URL must be set, either in a YAML config file or with --cpms.", file=sys.stderr)
+        sys.exit(1)
 
 
 def get_ssl_context(ssl_cert, ssl_key):

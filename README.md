@@ -31,7 +31,11 @@ ocpp-relay-server --cpms wss://<actual OCPP server>/ws/webSocket &
 ocpp-snoop2mqtt --mqtt-broker-username <user> --mqtt-broker-password <pw> --mqtt-broker-host=homeassistant
 ```
 
-Both scripts describe arguments with --help. The scripts can be installed from the top-level with:
+The scripts can load parameters either with a YAML configuration file or command line arguments. The
+YAML file may be shared. See [configuration_example.yaml](config/configuration_example.yaml). Both scripts
+describe arguments with --help.
+
+The scripts can be installed from the top-level with:
 
 ```bash
 pip install .

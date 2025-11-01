@@ -15,6 +15,7 @@ dependencies = [
     "asyncio",
     "dataclasses_json",
     "paho-mqtt",
+    "pyyaml",
     "setuptools",
     "websockets>=15.0.1"
 ]
