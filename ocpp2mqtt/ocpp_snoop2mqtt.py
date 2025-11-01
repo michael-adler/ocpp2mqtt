@@ -4,6 +4,8 @@
 import argparse
 import asyncio
 import logging
+from logging.handlers import SysLogHandler
+import os
 import sys
 import yaml
 
@@ -37,6 +39,8 @@ Map a stream of OCPP messages to MQTT topics.
         help="""Username for MQTT broker authentication (default: %(default)s).""")
     parser.add_argument('--mqtt-broker-password', type=str, default=None,
         help="""Password for MQTT broker authentication.""")
+
+    parser.add_argument('--syslog', action='store_true', help='Write logs to syslog instead of stdout')
 
     # Verbose/quiet
     group = parser.add_mutually_exclusive_group()
@@ -107,8 +111,27 @@ async def core():
 def main():
     parse_args()
 
-    logging.basicConfig(level=(logging.DEBUG if args.verbose else logging.INFO),
-        format='%(asctime)s - [%(levelname)-4.4s] - [%(threadName)-7.7s] - [%(name)-20.20s] - %(message)s')
+    # Configure logging. If --syslog is set, send logs to the system logger.
+    level = logging.DEBUG if args.verbose else logging.INFO
+    if args.syslog:
+        # Prefer Unix domain socket /dev/log, otherwise fall back to UDP localhost:514
+        if os.path.exists("/dev/log"):
+            address = "/dev/log"
+        else:
+            address = ("localhost", 514)
+        try:
+            # Use local0 facility and mark program name in the message
+            handler = SysLogHandler(address=address, facility=SysLogHandler.LOG_LOCAL0)
+            logging.basicConfig(level=level,
+                handlers=[handler],
+                format='ocpp-snoop2mqtt: %(levelname)s - %(threadName)s - %(name)s - %(message)s')
+        except Exception:
+            # Fall back to basic config if SysLogHandler fails
+            logging.basicConfig(level=level,
+                                format='%(asctime)s - [%(levelname)-4.4s] - [%(threadName)-7.7s] - [%(name)-20.20s] - %(message)s')
+    else:
+        logging.basicConfig(level=level,
+            format='%(asctime)s - [%(levelname)-4.4s] - [%(threadName)-7.7s] - [%(name)-20.20s] - %(message)s')
 
     try:
         asyncio.run(core())
