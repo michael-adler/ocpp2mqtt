@@ -12,8 +12,7 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
-    "asyncio",
-    "dataclasses_json",
+    "dataclasses-json",
     "paho-mqtt",
     "pyyaml",
     "setuptools",
