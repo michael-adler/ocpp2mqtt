@@ -1,0 +1,105 @@
+#!/bin/sh
+#
+# PROVIDE: ocpp2mqtt
+# REQUIRE: DAEMON NETWORKING
+# KEYWORD: shutdown
+#
+# Add to /etc/rc.conf or /etc/rc.conf.local:
+#
+# ocpp2mqtt_enable="YES"
+# ocpp2mqtt_relay_args="..."
+# ocpp2mqtt_snoop_args="..."
+#
+# Optional:
+# ocpp2mqtt_user="ocpp"
+# ocpp2mqtt_restart_delay="10"     # Seconds between restarts (default: 10)
+# ocpp2mqtt_relay_log="..."
+# ocpp2mqtt_snoop_log="..."
+
+. /etc/rc.subr
+
+name="ocpp2mqtt"
+rcvar=ocpp2mqtt_enable
+
+load_rc_config $name
+
+: ${ocpp2mqtt_enable:="NO"}
+: ${ocpp2mqtt_user:="nobody"}
+: ${ocpp2mqtt_relay_cmd:="/usr/local/bin/ocpp-relay-server"}
+: ${ocpp2mqtt_snoop_cmd:="/usr/local/bin/ocpp-snoop2mqtt"}
+: ${ocpp2mqtt_relay_args:=""}
+: ${ocpp2mqtt_snoop_args:=""}
+: ${ocpp2mqtt_restart_delay:="10"}
+: ${ocpp2mqtt_relay_log:="/var/log/ha/ocpp-relay-server.log"}
+: ${ocpp2mqtt_snoop_log:="/var/log/ha/ocpp-snoop2mqtt.log"}
+
+pidfile_relay="/var/run/${name}-relay.pid"
+pidfile_snoop="/var/run/${name}-snoop.pid"
+
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+status_cmd="${name}_status"
+reload_cmd="${name}_reload"
+extra_commands="reload"
+
+ocpp2mqtt_start()
+{
+    echo "Starting ocpp2mqtt services (restart delay: ${ocpp2mqtt_restart_delay}s)..."
+
+    /usr/sbin/daemon -fHr -R "${ocpp2mqtt_restart_delay}" \
+        -P "${pidfile_relay}" \
+        -u "${ocpp2mqtt_user}" \
+        -o "${ocpp2mqtt_relay_log}" \
+        "${ocpp2mqtt_relay_cmd}" ${ocpp2mqtt_relay_args}
+
+    /usr/sbin/daemon -r -R "${ocpp2mqtt_restart_delay}" \
+        -P "${pidfile_snoop}" \
+        -u "${ocpp2mqtt_user}" \
+        -o "${ocpp2mqtt_snoop_log}" \
+        "${ocpp2mqtt_snoop_cmd}" ${ocpp2mqtt_snoop_args}
+}
+
+ocpp2mqtt_stop()
+{
+    echo "Stopping ocpp2mqtt services..."
+    for pidfile in "${pidfile_snoop}" "${pidfile_relay}"; do
+        if [ -f "${pidfile}" ]; then
+            kill "$(cat "${pidfile}")" 2>/dev/null && rm -f "${pidfile}"
+        fi
+    done
+}
+
+ocpp2mqtt_reload()
+{
+    echo "Reloading ocpp2mqtt services (sending SIGHUP)..."
+    for pidfile in "${pidfile_snoop}" "${pidfile_relay}"; do
+        if [ -f "${pidfile}" ]; then
+            pid=$(cat "${pidfile}")
+            if kill -0 "$pid" 2>/dev/null; then
+                echo "Sending SIGHUP to PID $pid"
+                kill -HUP "$pid" 2>/dev/null || true
+            else
+                echo "PID $pid from ${pidfile} not running"
+            fi
+        else
+            echo "Pidfile ${pidfile} not found; skipping"
+        fi
+    done
+}
+
+ocpp2mqtt_status()
+{
+    if [ -f "${pidfile_relay}" ] && kill -0 "$(cat "${pidfile_relay}")" 2>/dev/null; then
+        echo "ocpp-relay-server is running as PID $(cat ${pidfile_relay})"
+    else
+        echo "ocpp-relay-server is not running"
+    fi
+
+    if [ -f "${pidfile_snoop}" ] && kill -0 "$(cat "${pidfile_snoop}")" 2>/dev/null; then
+        echo "ocpp-snoop2mqtt is running as PID $(cat ${pidfile_snoop})"
+    else
+        echo "ocpp-snoop2mqtt is not running"
+    fi
+}
+
+run_rc_command "$1"
