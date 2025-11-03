@@ -41,4 +41,4 @@ The scripts can be installed from the top-level with:
 pip install .
 ```
 
-OS-specific configuration files to run ocpp2mqtt as a service are stored in [init/](). There are not yet scripts to install them automatically.
+OS-specific configuration files to run ocpp2mqtt as a service are stored in [init/](init). There are not yet scripts to install them automatically.
