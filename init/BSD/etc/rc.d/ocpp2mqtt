@@ -52,7 +52,7 @@ ocpp2mqtt_start()
         -o "${ocpp2mqtt_relay_log}" \
         "${ocpp2mqtt_relay_cmd}" ${ocpp2mqtt_relay_args}
 
-    /usr/sbin/daemon -r -R "${ocpp2mqtt_restart_delay}" \
+    /usr/sbin/daemon -fHr -R "${ocpp2mqtt_restart_delay}" \
         -P "${pidfile_snoop}" \
         -u "${ocpp2mqtt_user}" \
         -o "${ocpp2mqtt_snoop_log}" \
