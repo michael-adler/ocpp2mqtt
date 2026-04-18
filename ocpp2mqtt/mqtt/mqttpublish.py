@@ -191,7 +191,9 @@ class MQTTPublisher:
             discover["components"][f"{data.unique_id}_value"]["icon"] = "mdi:meter-electric-outline"
             discover["components"][f"{data.unique_id}_value"]["device_class"] = data.device_class
             if data.device_class == "energy":
-                discover["components"][f"{data.unique_id}_value"]["state_class"] = "total"
+                discover["components"][f"{data.unique_id}_value"]["state_class"] = "total_increasing"
+            if data.device_class in ["current", "power", "voltage"]:
+                discover["components"][f"{data.unique_id}_value"]["state_class"] = "measurement"
 
         self._logger.info(f"Publishing discovery message for {data} to topic {topic}")
         info = self._mqtt.publish(topic, json.dumps(discover), qos=1, retain=False)
