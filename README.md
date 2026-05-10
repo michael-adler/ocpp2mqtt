@@ -1,3 +1,13 @@
+# Archived - code moved to new repository
+
+A new project combines the MQTT scripts here and a Home Assistant HACS integration that manages the OCPP relay
+and sensors on the Home Assistant host:
+
+https://github.com/michael-adler/ha-ocpp-relay
+
+The MQTT scripts there take the same arguments and are installed the same way as the archived versions here.
+They share code with the HACS integration.
+
 # OCPP Relay with Snooping and MQTT Metering
 
 EV chargers are typically controlled by the [Open Charge Point Protocol](https://openchargealliance.org/protocols/open-charge-point-protocol/) \(OCPP\). The protocol includes metering. Extracting metering data from a charger is challenging if you have to implement a full Charge Point Management System \(CPMS\). The relay acts as a full CPMS to an EV charger but implements the service by relaying all requests to a real CPMS. The relay exposes a second service where OCPP traffic can be monitored. No commands are accepted on this snoop port. Multiple clients may connect to the snoop service and each one receives the same OCPP JSON stream.
